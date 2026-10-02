@@ -1,6 +1,43 @@
-# Retrivance
+<p align="center">
+  <img src="https://img.shields.io/badge/Python-3.10%2B-3776AB?style=for-the-badge&logo=python&logoColor=white" />
+  <img src="https://img.shields.io/badge/FastAPI-0.109%2B-009688?style=for-the-badge&logo=fastapi&logoColor=white" />
+  <img src="https://img.shields.io/badge/Streamlit-1.31%2B-FF4B4B?style=for-the-badge&logo=streamlit&logoColor=white" />
+  <img src="https://img.shields.io/badge/ChromaDB-0.4%2B-F0C05A?style=for-the-badge&logo=chromadb&logoColor=white" />
+  <img src="https://img.shields.io/badge/scikit--learn-1.3%2B-F7931E?style=for-the-badge&logo=scikit-learn&logoColor=white" />
+  <img src="https://img.shields.io/badge/Sentence--Transformers-2.2%2B-6B9BD2?style=for-the-badge&logo=huggingface&logoColor=white" />
+  <img src="https://img.shields.io/badge/License-Apache%202.0-blue?style=for-the-badge" />
+</p>
 
-Dual-gate defense for Retrieval-Augmented Generation (RAG) pipelines. Retrivance screens documents before they are indexed and screens chunks again before they reach the model, treating all retrieved text as untrusted data.
+<h1 align="center">🛡️ Retrivance</h1>
+
+<p align="center">
+  <strong>Dual-gate defense for Retrieval-Augmented Generation (RAG) pipelines</strong>
+</p>
+
+<p align="center">
+  <em>Retrivance screens documents before they are indexed and screens chunks again before they reach the model, treating all retrieved text as untrusted data.</em>
+</p>
+
+---
+
+## 📋 Table of Contents
+
+- [Overview](#-overview)
+- [Architecture](#-architecture)
+- [Detection Layers](#-detection-layers)
+- [Evaluation](#-evaluation)
+- [Limitations](#-limitations)
+- [Roadmap](#-roadmap)
+- [Installation](#-installation)
+- [Usage](#-usage)
+- [Repository Layout](#-repository-layout)
+- [Stack](#-stack)
+- [Design Principles](#-design-principles)
+- [MITRE ATLAS Alignment](#-mitre-atlas-alignment)
+- [References](#-references)
+- [License](#-license)
+
+---
 
 ## Overview
 
@@ -15,9 +52,48 @@ No single detector is treated as sufficient. Each layer produces a signal, and t
 
 ---
 
+## Architecture
+
+```mermaid
+graph TB
+    subgraph "Ingestion Gate"
+        A[Raw Documents] --> B[L1: Ingest Scanner]
+        B --> C[L2: Embedding Anomaly Guard]
+        C --> D[L3: Provenance Store]
+        D --> E{Verdict}
+        E -->|PASS| F[Vector Database]
+        E -->|QUARANTINE| G[Quarantine Store]
+    end
+
+    subgraph "Retrieval Gate"
+        H[User Query] --> F
+        F --> I[Top-K Chunks]
+        I --> J[L4: Context Filter]
+        J --> K[L5: Influence Engine]
+        K --> L[Verified Context]
+        L --> M[Target LLM]
+        M --> N[Verified Answer]
+    end
+
+    subgraph "SOC Dashboard"
+        O[L6: Dashboard]
+        O --> G
+        O --> D
+    end
+
+    style B fill:#FFE4E1
+    style C fill:#E0FFFF
+    style D fill:#F0FFF0
+    style J fill:#FFE4E1
+    style K fill:#E0FFFF
+    style G fill:#FFB6C1
+```
+
+---
+
 ## Detection Layers
 
-### L1. Ingest scanner (`core/scanner.py`)
+### 🔍 L1. Ingest Scanner (`core/scanner.py`)
 
 Cheap lexical checks that run on every document.
 
@@ -27,7 +103,7 @@ Cheap lexical checks that run on every document.
 - Imperative injection phrasing (for example "ignore previous instructions", "act as")
 - Exfiltration markers: canary tokens, webhook URLs, OAST-style callbacks
 
-### L2. Embedding anomaly guard (`core/embedding_guard.py`)
+### 🧠 L2. Embedding Anomaly Guard (`core/embedding_guard.py`)
 
 Embeds chunks with `sentence-transformers/all-MiniLM-L6-v2` and looks for retrieval bait.
 
@@ -35,7 +111,7 @@ Embeds chunks with `sentence-transformers/all-MiniLM-L6-v2` and looks for retrie
 - Hubness score: chunks that sit close to an unusually large part of the query space
 - Reference-corpus comparison, so a single unusual document is not flagged in isolation
 
-### L3. Provenance store (`core/provenance.py`)
+### 🔐 L3. Provenance Store (`core/provenance.py`)
 
 SQLite ledger recording the identity and integrity state of each document.
 
@@ -45,7 +121,7 @@ SQLite ledger recording the identity and integrity state of each document.
 
 Detects content that changed after ingestion or arrived from an unverified source.
 
-### L4. Context filter (`core/filter.py`)
+### 🛡️ L4. Context Filter (`core/filter.py`)
 
 Runs at query time on the retrieved chunks.
 
@@ -54,7 +130,7 @@ Runs at query time on the retrieved chunks.
 - TF-IDF + LogisticRegression classifier score
 - Quarantine of flagged chunks
 
-### L5. Counterfactual influence engine (`core/influence.py`)
+### ⚖️ L5. Counterfactual Influence Engine (`core/influence.py`)
 
 Measures how much each chunk moves the answer.
 
@@ -66,7 +142,7 @@ divergence_i    = 1 - cos_sim(embed(baseline), embed(counterfactual_i))
 
 A chunk with high divergence is treated as disproportionately influential, even if it passed every lexical check. The last remaining chunk is never dropped. Cost is K+1 LLM calls per query.
 
-### L6. Dashboard (`ui/dashboard.py`)
+### 📊 L6. Dashboard (`ui/dashboard.py`)
 
 Streamlit interface for ingest audit trails, query monitoring, quarantine approve/reject, provenance verification and per-document risk scores.
 
