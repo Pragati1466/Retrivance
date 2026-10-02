@@ -1,7 +1,7 @@
 from pydantic import BaseModel, Field
 from typing import List, Dict, Optional, Any
 from enum import Enum
-from datetime import datetime
+from datetime import datetime, timezone
 
 
 class ThreatCategory(str, Enum):
@@ -22,7 +22,7 @@ class ChunkMetadata(BaseModel):
     chunk_id: str
     document_id: str
     author_id: str
-    timestamp: datetime = Field(default_factory=datetime.utcnow)
+    timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     sha256_hash: str
     signature: Optional[str] = None
     custom_attributes: Dict[str, Any] = Field(default_factory=dict)

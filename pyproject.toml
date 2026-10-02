@@ -10,8 +10,8 @@ readme = "README.md"
 authors = [{ name = "Security Research Team", email = "research@sentinel.internal" }]
 license = { text = "Apache-2.0" }
 classifiers = [
-    "Security",
-    "Machine Learning",
+    "Topic :: Security",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
 ]
@@ -24,7 +24,6 @@ dependencies = [
     "streamlit>=1.31.0",
     "numpy>=1.24.0",
     "scipy>=1.11.0",
-    "pytest>=7.4.0",
     "cryptography>=41.0.0",
     "pyyaml>=6.0.0"
 ]
@@ -33,7 +32,8 @@ dependencies = [
 dev = [
     "black",
     "flake8",
-    "isort"
+    "isort",
+    "pytest>=7.4.0"
 ]
 
 [project.scripts]

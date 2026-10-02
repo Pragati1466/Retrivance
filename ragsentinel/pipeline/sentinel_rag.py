@@ -125,11 +125,13 @@ class SentinelRAGPipeline:
         # Layer 5: Counterfactual Influence Engine
         final_answer, influence_scores, flagged_chunks = self.influence_engine.analyze_influence(query, accepted_chunks)
 
-        # Drop chunks that exceed the causal influence threshold
-        if flagged_chunks:
+        # Drop chunks that exceed the causal influence threshold, but never drop the last chunk
+        if flagged_chunks and len(accepted_chunks) > 1:
             accepted_chunks = [c for c in accepted_chunks if c.metadata.chunk_id not in flagged_chunks]
             audit_trail.append(f"Dropped causal influence outliers: {flagged_chunks}")
             # Re-synthesize answer with the outlier chunks removed
             final_answer = self.llm_fn(query, [c.text for c in accepted_chunks])
+        elif flagged_chunks:
+            audit_trail.append(f"Flagged high-influence chunks but retained all chunks (last chunk protection): {flagged_chunks}")
 
         return final_answer, audit_trail

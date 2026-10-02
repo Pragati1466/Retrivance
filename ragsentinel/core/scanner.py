@@ -13,7 +13,6 @@ class IngestScanner:
         '\u200d',  # Zero Width Joiner
         '\ufeff',  # Byte Order Mark / Zero Width No-Break Space
         '\u2060',  # Word Joiner
-        '\u00a0',  # Non-Breaking Space (flagged if used anomalously)
     }
 
     # Matches imperative prompt overrides delivered via document text
