@@ -1,0 +1,57 @@
+# RAGSentinel Security Configuration Matrix
+
+# Layer 1: Ingest Scanner Thresholds
+scanner:
+  lexical_threshold: 0.35
+  zero_width_threshold: 2
+  homoglyph_threshold: 2
+  html_obfuscation_threshold: 1
+  instruction_threshold: 1
+  exfiltration_threshold: 1
+
+# Layer 2: Embedding Anomaly Guard Thresholds
+embedding_guard:
+  model_name: "sentence-transformers/all-MiniLM-L6-v2"
+  top_k_threshold: 2
+  hubness_threshold: 0.40
+  cosine_similarity_threshold: 0.40
+
+# Layer 3: Provenance Store Configuration
+provenance:
+  db_path: "data/ledger/provenance_store.db"
+  enable_signatures: false
+
+# Layer 4: Context Filter Thresholds
+filter:
+  classifier_weight: 0.5
+  quarantine_threshold: 0.40
+  prompt_injection_threshold: 0.40
+
+# Layer 5: Influence Engine Thresholds
+influence:
+  model_name: "sentence-transformers/all-MiniLM-L6-v2"
+  influence_threshold: 0.45
+
+# Composite Risk Scoring
+composite:
+  weights:
+    lexical: 0.25
+    hubness: 0.25
+    classifier: 0.25
+    influence: 0.25
+  bias_offset: 0.5
+
+# Vector Database Configuration
+vector_db:
+  collection_name: "sentinel_corpus"
+  persist_directory: null
+
+# API Configuration
+api:
+  host: "0.0.0.0"
+  port: 8000
+  reload: true
+
+# UI Configuration
+ui:
+  port: 8501

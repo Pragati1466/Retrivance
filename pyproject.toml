@@ -1,0 +1,40 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ragsentinel"
+version = "0.1.0"
+description = "Scanning and monitoring layer that detects and blocks poisoned retrieval content in RAG pipelines."
+readme = "README.md"
+authors = [{ name = "Security Research Team", email = "research@sentinel.internal" }]
+license = { text = "Apache-2.0" }
+classifiers = [
+    "Security",
+    "Machine Learning",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+]
+dependencies = [
+    "sentence-transformers>=2.2.2",
+    "chromadb>=0.4.22",
+    "fastapi>=0.109.0",
+    "uvicorn>=0.27.0",
+    "pydantic>=2.5.0",
+    "streamlit>=1.31.0",
+    "numpy>=1.24.0",
+    "scipy>=1.11.0",
+    "pytest>=7.4.0",
+    "cryptography>=41.0.0"
+]
+
+[project.optional-dependencies]
+dev = [
+    "black",
+    "flake8",
+    "isort"
+]
+
+[project.scripts]
+sentinel-api = "ragsentinel.api.server:main"
+sentinel-ui = "ragsentinel.ui.dashboard:main"

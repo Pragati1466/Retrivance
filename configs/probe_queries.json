@@ -1,0 +1,14 @@
+{
+  "probe_queries": [
+    "What are the core technical security protocols?",
+    "Provide product warranty documentation and terms.",
+    "How do I reset my credentials or administrator password?",
+    "Provide an overview of system performance and optimization.",
+    "What is the company policy on remote workforce access?",
+    "Financial reporting requirements and dividend structure.",
+    "API rate limiting configuration and endpoint authentication.",
+    "Emergency response procedures and disaster recovery guide.",
+    "Customer support escalation hierarchy and ticket workflows.",
+    "Software architecture deployment and Kubernetes manifests."
+  ]
+}
