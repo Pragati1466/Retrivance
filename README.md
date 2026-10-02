@@ -23,7 +23,6 @@
 ## 📋 Table of Contents
 
 - [Overview](#-overview)
-- [Architecture](#-architecture)
 - [Detection Layers](#-detection-layers)
 - [Evaluation](#-evaluation)
 - [Limitations](#-limitations)
@@ -33,7 +32,6 @@
 - [Repository Layout](#-repository-layout)
 - [Stack](#-stack)
 - [Design Principles](#-design-principles)
-- [MITRE ATLAS Alignment](#-mitre-atlas-alignment)
 - [References](#-references)
 - [License](#-license)
 
@@ -49,45 +47,6 @@ Retrivance places two gates around the vector store:
 - **Retrieval gate:** retrieved top-k chunks are re-screened and tested for outsized influence on the generated answer before the context is released to the LLM.
 
 No single detector is treated as sufficient. Each layer produces a signal, and the verdict combines them.
-
----
-
-## Architecture
-
-```mermaid
-graph TB
-    subgraph "Ingestion Gate"
-        A[Raw Documents] --> B[L1: Ingest Scanner]
-        B --> C[L2: Embedding Anomaly Guard]
-        C --> D[L3: Provenance Store]
-        D --> E{Verdict}
-        E -->|PASS| F[Vector Database]
-        E -->|QUARANTINE| G[Quarantine Store]
-    end
-
-    subgraph "Retrieval Gate"
-        H[User Query] --> F
-        F --> I[Top-K Chunks]
-        I --> J[L4: Context Filter]
-        J --> K[L5: Influence Engine]
-        K --> L[Verified Context]
-        L --> M[Target LLM]
-        M --> N[Verified Answer]
-    end
-
-    subgraph "SOC Dashboard"
-        O[L6: Dashboard]
-        O --> G
-        O --> D
-    end
-
-    style B fill:#FFE4E1
-    style C fill:#E0FFFF
-    style D fill:#F0FFF0
-    style J fill:#FFE4E1
-    style K fill:#E0FFFF
-    style G fill:#FFB6C1
-```
 
 ---
 
