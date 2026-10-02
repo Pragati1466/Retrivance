@@ -1,5 +1,6 @@
 import chromadb
 import yaml
+from pathlib import Path
 from typing import List, Optional, Tuple
 from ragsentinel.models.schemas import Chunk, ChunkMetadata, IngestScanResult, ScanVerdict, LayerAnomalyScores, ThreatCategory
 from ragsentinel.core.scanner import IngestScanner
@@ -33,6 +34,16 @@ class SentinelRAGPipeline:
         self.quarantine = QuarantineStore()
         classifier_path = self.config.get('models', {}).get('classifier_path')
         self.filter = RetrievalFilter(classifier_path=classifier_path)
+        
+        # Load classifier for ingest-time use
+        self.classifier_model = None
+        self.classifier_vectorizer = None
+        if classifier_path and Path(classifier_path).exists():
+            import pickle
+            with open(classifier_path, "rb") as f:
+                model_data = pickle.load(f)
+                self.classifier_vectorizer = model_data["vectorizer"]
+                self.classifier_model = model_data["classifier"]
 
         # Deterministic generation callback used if none provided
         self.llm_fn = llm_fn or self._fallback_llm
@@ -46,6 +57,18 @@ class SentinelRAGPipeline:
         context_block = "\n".join(f"[{i+1}] {c}" for i, c in enumerate(context_chunks))
         return f"Response synthesised for query: '{query}'. Evidence used:\n{context_block}"
 
+    def _get_classifier_score(self, text: str) -> float:
+        """Returns classifier probability of being poisoned."""
+        if self.classifier_model is None or self.classifier_vectorizer is None:
+            return 0.0
+        
+        try:
+            tfidf = self.classifier_vectorizer.transform([text])
+            prob = self.classifier_model.predict_proba(tfidf)[0, 1]
+            return float(prob)
+        except Exception:
+            return 0.0
+
     def secure_ingest(self, chunks: List[Chunk]) -> List[IngestScanResult]:
         """Runs chunks through Layers 1, 2, and 3 before inserting into the vector store."""
         scan_results: List[IngestScanResult] = []
@@ -58,13 +81,18 @@ class SentinelRAGPipeline:
             # Layer 1: Ingest Lexical & Structure Scan
             lex_score, threats, reasons = self.scanner.scan(chunk.text)
             hub_score, is_hub = hubness_results[idx]
+            clf_score = self._get_classifier_score(chunk.text)
 
             if is_hub:
                 threats.append(ThreatCategory.OBFUSCATION_BAIT)
                 reasons.append(f"Chunk acts as an embedding hub (Score: {hub_score:.2f}).")
 
-            # Composite Risk Calculation
-            composite_risk = float(min(1.0, 0.5 * lex_score + 0.5 * hub_score))
+            if clf_score > 0.5:
+                threats.append(ThreatCategory.PROMPT_INJECTION)
+                reasons.append(f"Classifier detected injection pattern (Score: {clf_score:.2f}).")
+
+            # Composite Risk Calculation (now includes classifier)
+            composite_risk = float(min(1.0, 0.33 * lex_score + 0.33 * hub_score + 0.34 * clf_score))
             verdict = ScanVerdict.PASS
             if composite_risk >= 0.50:
                 verdict = ScanVerdict.QUARANTINE
@@ -78,7 +106,7 @@ class SentinelRAGPipeline:
                 scores=LayerAnomalyScores(
                     lexical_score=lex_score,
                     hubness_score=hub_score,
-                    classifier_score=0.0,
+                    classifier_score=clf_score,
                     influence_score=0.0
                 ),
                 detected_threats=threats,

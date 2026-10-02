@@ -38,4 +38,8 @@ yarn-error.log*
 
 # Data
 data/ledger/*.db
+data/ledger/chroma_db/
 data/benchmark/*.jsonl
+
+# Models
+models/*.pkl

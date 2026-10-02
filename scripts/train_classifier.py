@@ -88,8 +88,11 @@ def train_classifier():
     print("\nThreshold Analysis:")
     for threshold in [0.3, 0.5, 0.7, 0.9]:
         y_pred_thresh = (y_scores >= threshold).astype(int)
-        precision = sum((y_pred_thresh == 1) & (y_test == 1)) / max(1, sum(y_pred_thresh == 1))
-        recall = sum((y_pred_thresh == 1) & (y_test == 1)) / max(1, sum(y_test == 1))
+        tp = sum((y_pred_thresh == 1) & (y_test == 1))
+        fp = sum((y_pred_thresh == 1) & (y_test == 0))
+        fn = sum((y_pred_thresh == 0) & (y_test == 1))
+        precision = tp / max(1, tp + fp)
+        recall = tp / max(1, tp + fn)
         print(f"Threshold {threshold}: Precision={precision:.3f}, Recall={recall:.3f}")
 
 
