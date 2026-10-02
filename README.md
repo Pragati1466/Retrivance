@@ -23,6 +23,36 @@ Retrivance treats retrieved documents as untrusted data rather than trusted inst
 
 ---
 
+## 🎯 MITRE ATLAS Alignment
+
+Retrivance is designed to address specific techniques documented in the [MITRE ATLAS](https://atlas.mitre.org/) (Adversarial Threat Landscape for Artificial-Intelligence Systems) matrix, a living knowledge base of adversary tactics and techniques against AI systems.
+
+### ATLAS Techniques Covered
+
+| ATLAS Technique | Category | Retrivance Defense |
+|----------------|----------|-------------------|
+| **RAG Poisoning** | Initial Access / Resource Development | Ingest scanner + embedding anomaly guard |
+| **False RAG Entry Injection** | Resource Development | Provenance validation + integrity checks |
+| **Retrieval Content Crafting** | Execution | Semantic similarity + hubness detection |
+| **Gather RAG-Indexed Targets** | Reconnaissance | Query-neighborhood analysis |
+| **LLM Prompt Injection** (via documents) | Execution | Lexical scanner + classification |
+| **RAG Credential Harvesting** | Collection | Exfiltration pattern detection |
+| **LLM Data Leakage** | Exfiltration | Retrieval-time filtering + quarantine |
+| **LLM Prompt Obfuscation** | Defense Evasion | Zero-width char detection + homoglyph analysis |
+| **Triggers in Multimodal Inputs** | Defense Evasion | Hidden text detection (HTML/CSS) |
+
+### Context: Why RAG Defense Matters
+
+The ATLAS matrix (as of 2026) lists 16 tactics, 208 techniques, 40 mitigations, and 73 case studies. New agent-focused techniques highlight three key trends:
+
+1. **Agents act, not just answer** — AI Agent Tool Invocation, Escape to Host, and Data Destruction via Tool Invocation
+2. **Retrieval is an attack surface** — RAG Poisoning, False RAG Entry Injection, AI Agent Context Poisoning, and Retrieval Content Crafting show attackers planting content that the model later trusts
+3. **AI supply chain is weak** — Publish Hallucinated Entities, Publish Poisoned AI Artifacts, and AI Supply Chain Rug Pull target the models, datasets, and packages that teams pull in
+
+Retrivance addresses the retrieval attack surface by treating knowledge base content as untrusted data rather than trusted instructions.
+
+---
+
 ## ✨ Key Features
 
 ### 🔍 Multi-Layer Detection
@@ -215,6 +245,21 @@ The evaluation demonstrates a strong precision-oriented behavior: flagged sample
 - **Clean retention:** 93.33%
 
 These results indicate that the current system is conservative and can avoid incorrectly blocking many benign samples, but remains vulnerable to adaptive or previously unseen attacks. The adversarial split is therefore an important area for future improvement rather than a result to conceal.
+
+### Evaluation Metrics
+
+The evaluation follows MITRE ATLAS recommendations for testing AI security controls:
+
+| Metric | Required | Current | Status |
+|--------|----------|---------|--------|
+| Poisoning detection precision | ✅ | 76.19% | ✅ Measured |
+| Poisoning detection recall | ✅ | 28.57% | ✅ Measured |
+| Attack success rate (before/after) | ✅ | 100% → 71.43% | ✅ Measured |
+| Answer quality on clean queries | ✅ | 93.33% retention | ⚠️ LLM-judge recommended |
+| False-positive rate on benign tasks | ✅ | 6.67% | ✅ Measured |
+| Extra ingest/query latency | ✅ | ~356ms | ✅ Measured |
+
+**Note:** Answer quality via LLM-judge score or exact match on clean queries is recommended for future evaluation to fully satisfy the MITRE ATLAS specification. The current clean retention metric (93.33%) measures document preservation but not semantic answer quality.
 
 ---
 
@@ -474,6 +519,55 @@ OWASP specifically recommends monitoring embedding distributions, scanning retri
 
 ---
 
+## 🎓 Project Background
+
+Retrivance is one of three AI + Cybersecurity projects designed to address real gaps in the MITRE ATLAS matrix:
+
+- **AgentGuard** — Runtime policy firewall for AI agent tool calls
+- **Retrivance (RAGSentinel)** — Detector and prevention layer for poisoned retrieval content
+- **ProvenanceGuard** — Scanner for hallucinated packages and tampered AI artifacts
+
+### Deliverables
+
+This project provides:
+
+- ✅ **Open-source repository** — https://github.com/Pragati1466/Retrivance
+- ✅ **Poisoning benchmark dataset** — Template-disjoint splits with adversarial variants
+- ✅ **Evaluation harness** — Scripts for measuring ASR, precision, recall, FPR, and latency
+- ✅ **Pip-installable library** — `pip install -e .` for easy integration
+- ✅ **SOC dashboard** — Streamlit UI for quarantine management and audit review
+- ⚠️ **Evaluation notebook** — Scripts available; Jupyter notebook format recommended for publication
+- ⚠️ **Short paper or blog** — README provides comprehensive documentation; formal write-up recommended for academic submission
+
+### Build Phases Completed
+
+| Phase | Status | Implementation |
+|-------|--------|----------------|
+| Baseline RAG app | ✅ | ChromaDB-based pipeline with public corpus simulation |
+| Poisoning dataset (200 docs, 4 attack types) | ✅ | Synthetic generator with answer swap, instruction injection, data exfil, hidden text |
+| Measure attacks with no defense | ✅ | Benchmark includes no-defense baseline measurement |
+| Implement scanner + filter + thresholds | ✅ | All 6 security layers implemented with configurable thresholds |
+| Add influence test + review UI | ✅ | Counterfactual influence engine + Streamlit dashboard |
+
+### Use Cases
+
+- **Resume/portfolio** — Demonstrates working knowledge of RAG security, MITRE ATLAS techniques, and adversarial ML evaluation
+- **Research publication** — Realistic benchmark with template-disjoint evaluation suitable for security conferences
+- **Demo** — 5-minute walkthrough possible using the Streamlit dashboard and API endpoints
+- **Production integration** — FastAPI gateway and modular design allow integration into existing RAG pipelines
+
+### Difficulty Level
+
+**Medium** — Best for research-style results and a publishable benchmark.
+
+This project is ideal for:
+- Security researchers focused on AI/ML robustness
+- ML engineers building production RAG systems
+- Red teams evaluating RAG vulnerabilities
+- Academic publication in AI security venues
+
+---
+
 ## 📚 References
 
 - Lewis et al. — *Retrieval-Augmented Generation for Knowledge-Intensive NLP Tasks*, NeurIPS 2020.
@@ -483,6 +577,7 @@ OWASP specifically recommends monitoring embedding distributions, scanning retri
 - OWASP — *LLM Prompt Injection Prevention Cheat Sheet*.
 - Sentence Transformers — *all-MiniLM-L6-v2 documentation*.
 - Reimers & Gurevych — *Sentence-BERT: Sentence Embeddings using Siamese BERT-Networks*.
+- MITRE ATLAS — *Adversarial Threat Landscape for Artificial-Intelligence Systems*.
 
 ---
 
