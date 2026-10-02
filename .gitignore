@@ -43,3 +43,6 @@ data/benchmark/*.jsonl
 
 # Models
 models/*.pkl
+
+# Models
+models/*.pkl
