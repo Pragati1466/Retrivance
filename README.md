@@ -202,11 +202,6 @@ Python, sentence-transformers (`all-MiniLM-L6-v2`), scikit-learn (TF-IDF, Logist
 - Evaluate against crafted attacks, not only standard test examples.
 - Report false positives; a defense that drops legitimate knowledge is not deployable.
 
----
-
-## MITRE ATLAS Alignment
-
-Retrivance addresses specific techniques documented in the [MITRE ATLAS](https://atlas.mitre.org/) matrix:
 
 | ATLAS Technique | Retrivance Defense |
 |----------------|-------------------|
@@ -229,7 +224,6 @@ Retrivance addresses specific techniques documented in the [MITRE ATLAS](https:/
 - Reimers and Gurevych, Sentence-BERT: Sentence Embeddings using Siamese BERT-Networks
 - OWASP, Retrieval-Augmented Generation (RAG) Security Cheat Sheet
 - OWASP, LLM Prompt Injection Prevention Cheat Sheet
-- MITRE ATLAS, https://atlas.mitre.org
 
 ---
 
