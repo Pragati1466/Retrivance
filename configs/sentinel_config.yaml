@@ -44,7 +44,11 @@ composite:
 # Vector Database Configuration
 vector_db:
   collection_name: "sentinel_corpus"
-  persist_directory: null
+  persist_directory: "./data/ledger/chroma_db"
+
+# Models Configuration
+models:
+  classifier_path: "models/injection_clf.pkl"
 
 # API Configuration
 api:

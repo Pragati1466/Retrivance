@@ -32,6 +32,11 @@ class RevokeRequest(BaseModel):
     chunk_id: str
 
 
+class ApproveRejectRequest(BaseModel):
+    chunk_id: str
+    reviewer: str
+
+
 @app.post("/api/v1/ingest", response_model=List[IngestScanResult])
 async def ingest_documents(payload: IngestRequest):
     chunks_to_ingest: List[Chunk] = []
@@ -87,9 +92,34 @@ async def revoke_chunk(payload: RevokeRequest):
 @app.get("/api/v1/quarantine")
 async def get_quarantine_status():
     try:
-        # Get all chunks from ledger (future enhancement: filter by quarantine status)
-        metadata = pipeline.provenance.get_chunk_metadata
-        return {"status": "Quarantine management requires ledger query implementation"}
+        pending_chunks = pipeline.quarantine.get_pending_chunks()
+        return {"pending_chunks": pending_chunks, "count": len(pending_chunks)}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/v1/quarantine/approve")
+async def approve_quarantine_chunk(payload: ApproveRejectRequest):
+    try:
+        success = pipeline.quarantine.approve_chunk(payload.chunk_id, payload.reviewer)
+        if success:
+            # Get chunk from quarantine and ingest it
+            status = pipeline.quarantine.get_chunk_status(payload.chunk_id)
+            if status:
+                # Ingest into vector DB (would need to retrieve text from quarantine)
+                return {"chunk_id": payload.chunk_id, "status": "approved"}
+        raise HTTPException(status_code=404, detail="Chunk not found or already processed")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/v1/quarantine/reject")
+async def reject_quarantine_chunk(payload: ApproveRejectRequest):
+    try:
+        success = pipeline.quarantine.reject_chunk(payload.chunk_id, payload.reviewer)
+        if success:
+            return {"chunk_id": payload.chunk_id, "status": "rejected"}
+        raise HTTPException(status_code=404, detail="Chunk not found or already processed")
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

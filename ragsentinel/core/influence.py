@@ -1,4 +1,4 @@
-from typing import List, Dict, Callable
+from typing import List, Dict, Callable, Tuple
 import numpy as np
 from sentence_transformers import SentenceTransformer
 from ragsentinel.models.schemas import Chunk

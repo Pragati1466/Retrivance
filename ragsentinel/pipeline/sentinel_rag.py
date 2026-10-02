@@ -7,6 +7,7 @@ from ragsentinel.core.embedding_guard import EmbeddingAnomalyGuard
 from ragsentinel.core.provenance import ProvenanceStore
 from ragsentinel.core.filter import RetrievalFilter
 from ragsentinel.core.influence import CounterfactualInfluenceEngine
+from ragsentinel.core.quarantine import QuarantineStore
 
 
 class SentinelRAGPipeline:
@@ -17,14 +18,21 @@ class SentinelRAGPipeline:
         with open(config_path, 'r') as f:
             self.config = yaml.safe_load(f)
         
-        self.chroma = chroma_client or chromadb.Client()
+        # Use persistent client if no custom client provided
+        if chroma_client is None:
+            chroma_path = self.config.get('vector_db', {}).get('persist_directory', './data/ledger/chroma_db')
+            self.chroma = chromadb.PersistentClient(path=chroma_path)
+        else:
+            self.chroma = chroma_client
         self.collection = self.chroma.get_or_create_collection(self.config['vector_db']['collection_name'])
         
         self.scanner = IngestScanner()
         self.embedding_guard = EmbeddingAnomalyGuard()
         provenance_db_path = self.config['provenance']['db_path']
         self.provenance = ProvenanceStore(db_path=provenance_db_path)
-        self.filter = RetrievalFilter()
+        self.quarantine = QuarantineStore()
+        classifier_path = self.config.get('models', {}).get('classifier_path')
+        self.filter = RetrievalFilter(classifier_path=classifier_path)
 
         # Deterministic generation callback used if none provided
         self.llm_fn = llm_fn or self._fallback_llm
@@ -79,7 +87,16 @@ class SentinelRAGPipeline:
             scan_results.append(res)
 
             # Layer 3: Store Provenance & Conditionally Insert into Vector DB
-            if verdict != ScanVerdict.QUARANTINE:
+            if verdict == ScanVerdict.QUARANTINE:
+                # Add to quarantine store
+                self.quarantine.add_to_quarantine(
+                    chunk_id=chunk.metadata.chunk_id,
+                    text=chunk.text,
+                    author_id=chunk.metadata.author_id,
+                    risk=composite_risk,
+                    reasons=reasons
+                )
+            else:
                 self.provenance.register_chunk(chunk.metadata)
                 self.collection.upsert(
                     ids=[chunk.metadata.chunk_id],
