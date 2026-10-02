@@ -1,4 +1,5 @@
 import chromadb
+import yaml
 from typing import List, Optional, Tuple
 from ragsentinel.models.schemas import Chunk, ChunkMetadata, IngestScanResult, ScanVerdict, LayerAnomalyScores, ThreatCategory
 from ragsentinel.core.scanner import IngestScanner
@@ -11,13 +12,18 @@ from ragsentinel.core.influence import CounterfactualInfluenceEngine
 class SentinelRAGPipeline:
     """The central security orchestration pipeline for RAGSentinel."""
 
-    def __init__(self, chroma_client: Optional[chromadb.Client] = None, llm_fn: Optional[any] = None):
+    def __init__(self, chroma_client: Optional[chromadb.Client] = None, llm_fn: Optional[any] = None, config_path: str = "configs/sentinel_config.yaml"):
+        # Load configuration
+        with open(config_path, 'r') as f:
+            self.config = yaml.safe_load(f)
+        
         self.chroma = chroma_client or chromadb.Client()
-        self.collection = self.chroma.get_or_create_collection("sentinel_corpus")
+        self.collection = self.chroma.get_or_create_collection(self.config['vector_db']['collection_name'])
         
         self.scanner = IngestScanner()
         self.embedding_guard = EmbeddingAnomalyGuard()
-        self.provenance = ProvenanceStore()
+        provenance_db_path = self.config['provenance']['db_path']
+        self.provenance = ProvenanceStore(db_path=provenance_db_path)
         self.filter = RetrievalFilter()
 
         # Deterministic generation callback used if none provided
