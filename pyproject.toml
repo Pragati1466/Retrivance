@@ -8,7 +8,7 @@ version = "0.1.0"
 description = "Scanning and monitoring layer that detects and blocks poisoned retrieval content in RAG pipelines."
 readme = "README.md"
 authors = [{ name = "Security Research Team", email = "research@sentinel.internal" }]
-license = { text = "Apache-2.0" }
+license = "Apache-2.0"
 classifiers = [
     "Topic :: Security",
     "Topic :: Scientific/Engineering :: Artificial Intelligence",
@@ -40,3 +40,7 @@ dev = [
 
 [project.scripts]
 sentinel-api = "ragsentinel.api.server:main"
+
+[tool.setuptools.packages.find]
+include = ["ragsentinel*"]
+exclude = ["data*", "configs*", "scripts*", "tests*"]
