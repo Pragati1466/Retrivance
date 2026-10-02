@@ -38,4 +38,3 @@ dev = [
 
 [project.scripts]
 sentinel-api = "ragsentinel.api.server:main"
-sentinel-ui = "ragsentinel.ui.dashboard:main"
