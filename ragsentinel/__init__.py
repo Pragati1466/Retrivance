@@ -1,2 +1,2 @@
-"""RAGSentinel: Security Layer for RAG Pipelines"""
+"""Retrivance: Security Layer for RAG Pipelines"""
 __version__ = "0.1.0"

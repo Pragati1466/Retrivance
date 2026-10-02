@@ -1,4 +1,4 @@
-# RAGSentinel Security Configuration Matrix
+# Retrivance Security Configuration Matrix
 
 # Layer 1: Ingest Scanner Thresholds
 scanner:

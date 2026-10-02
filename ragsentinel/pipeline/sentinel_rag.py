@@ -12,7 +12,7 @@ from ragsentinel.core.quarantine import QuarantineStore
 
 
 class SentinelRAGPipeline:
-    """The central security orchestration pipeline for RAGSentinel."""
+    """The central security orchestration pipeline for Retrivance."""
 
     def __init__(self, chroma_client: Optional[chromadb.Client] = None, llm_fn: Optional[any] = None, config_path: str = "configs/sentinel_config.yaml"):
         # Load configuration

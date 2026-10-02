@@ -3,7 +3,7 @@ import pandas as pd
 from ragsentinel.pipeline.sentinel_rag import SentinelRAGPipeline
 from ragsentinel.models.schemas import Chunk, ChunkMetadata
 
-st.set_page_config(page_title="RAGSentinel SOC Dashboard", layout="wide")
+st.set_page_config(page_title="Retrivance SOC Dashboard", layout="wide")
 
 
 @st.cache_resource
@@ -13,7 +13,7 @@ def get_pipeline():
 
 pipeline = get_pipeline()
 
-st.title("🛡️ RAGSentinel: Security Operations Console")
+st.title("🛡️ Retrivance: Security Operations Console")
 st.markdown("Real-time scanning, quarantine management, and poisoned retrieval defense.")
 
 tabs = st.tabs(["Ingest Inspector", "Query Security & Counterfactual", "Quarantine Review"])

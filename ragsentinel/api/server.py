@@ -4,7 +4,7 @@ from typing import List, Dict, Any
 from ragsentinel.pipeline.sentinel_rag import SentinelRAGPipeline
 from ragsentinel.models.schemas import Chunk, ChunkMetadata, IngestScanResult
 
-app = FastAPI(title="RAGSentinel Inspection Gateway", version="1.0.0")
+app = FastAPI(title="Retrivance Inspection Gateway", version="1.0.0")
 pipeline = SentinelRAGPipeline()
 
 
