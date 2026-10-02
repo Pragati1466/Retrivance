@@ -38,11 +38,11 @@ Retrivance can be deployed on two platforms:
 
 ---
 
-## 🌐 Render (FastAPI API)
+## 🌐 Railway (FastAPI API)
 
 ### Prerequisites
 - GitHub account
-- Render account (sign up at [render.com](https://render.com))
+- Railway account (sign up at [railway.app](https://railway.app))
 
 ### Steps
 
@@ -53,29 +53,27 @@ Retrivance can be deployed on two platforms:
    git push
    ```
 
-2. **Create new Web Service on Render**
-   - Go to [dashboard.render.com](https://dashboard.render.com)
-   - Click "New +" → "Web Service"
-   - Connect your GitHub repository: `Pragati1466/Retrivance`
+2. **Create new Project on Railway**
+   - Go to [railway.app](https://railway.app)
+   - Click "New Project" → "Deploy from GitHub repo"
+   - Select your repository: `Pragati1466/Retrivance`
    - Select branch: `main`
-   - Runtime: Python 3
-   - Build Command: `pip install -r requirements.txt`
-   - Start Command: `uvicorn ragsentinel.api.server:app --host 0.0.0.0 --port $PORT`
-   - Click "Create Web Service"
 
-3. **Configure Persistent Disk (for ChromaDB)**
-   - In your Render service settings
-   - Go to "Disk" section
-   - Create a new disk (1GB free tier)
+3. **Configure Service**
+   - Railway will detect it's a Python project
+   - Add a new service: "New Service" → "Python"
+   - Build command: `pip install -r requirements.txt && pip install -e .`
+   - Start command: `uvicorn ragsentinel.api.server:app --host 0.0.0.0 --port $PORT`
+
+4. **Add Persistent Volume (for ChromaDB)**
+   - In your service settings
+   - Go to "Volumes" section
+   - Add a new volume (1GB free tier)
    - Mount path: `/app/data/ledger`
 
-4. **Environment Variables**
-   - Render automatically sets `$PORT`
-   - No additional variables needed
-
 5. **Access your API**
-   - Render will provide a URL like: `https://your-app-name.onrender.com`
-   - API docs available at: `https://your-app-name.onrender.com/docs`
+   - Railway will provide a URL like `https://your-app-name.up.railway.app`
+   - API docs available at: `https://your-app-name.up.railway.app/docs`
 
 ---
 
