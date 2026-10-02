@@ -34,7 +34,8 @@ dev = [
     "black",
     "flake8",
     "isort",
-    "pytest>=7.4.0"
+    "pytest>=7.4.0",
+    "pytest-timeout>=2.2.0"
 ]
 
 [project.scripts]

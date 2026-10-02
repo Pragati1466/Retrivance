@@ -5,7 +5,7 @@ from ragsentinel.models.schemas import Chunk
 
 
 class CounterfactualInfluenceEngine:
-    """
+    r"""
     Computes causal influence per chunk: Δ_inf(c_i) = 1 - CosSim(LLM(Q, C), LLM(Q, C \ {c_i}))
     Measures how much a single chunk shifts the generated output.
     """
