@@ -1,594 +1,238 @@
-# 🛡️ Retrivance
+# Retrivance
 
-A multi-layer security pipeline for detecting and mitigating malicious content in Retrieval-Augmented Generation (RAG) systems.
+Dual-gate defense for Retrieval-Augmented Generation (RAG) pipelines. Retrivance screens documents before they are indexed and screens chunks again before they reach the model, treating all retrieved text as untrusted data.
 
-Retrivance is a security-focused RAG defense system designed to identify potentially malicious, poisoned, or adversarial content before it can influence downstream retrieval and generation. The system combines lexical detection, semantic similarity, classification, provenance/integrity checks, retrieval-time filtering, and counterfactual influence analysis to provide defense in depth against attacks targeting RAG knowledge bases.
+## Overview
 
----
+A RAG system trusts whatever its knowledge base returns. A single planted document can steer an answer, smuggle instructions into the prompt, or carry an exfiltration payload, and the result looks like ordinary retrieval.
 
-## 🎯 Problem
+Retrivance places two gates around the vector store:
 
-Retrieval-Augmented Generation improves LLM responses by grounding them in external knowledge. However, the retrieval layer creates a new attack surface: an attacker can insert malicious content into a knowledge base and attempt to make that content appear in retrieved context.
+- **Ingestion gate:** lexical scan, embedding anomaly check and provenance recording run on every document before it is embedded. Failing documents go to quarantine instead of the index.
+- **Retrieval gate:** retrieved top-k chunks are re-screened and tested for outsized influence on the generated answer before the context is released to the LLM.
 
-**Potential attacks include:**
-- Prompt injection through retrieved documents
-- RAG knowledge-base poisoning
-- Adversarial or obfuscated instructions
-- Malicious documents designed to bypass lexical filters
-- Semantically manipulated content
-- Tampering with trusted documents
-- Retrieval of attacker-controlled content
-
-Retrivance treats retrieved documents as untrusted data rather than trusted instructions and applies multiple security checks before content is allowed to influence the RAG pipeline.
+No single detector is treated as sufficient. Each layer produces a signal, and the verdict combines them.
 
 ---
 
-## 🎯 MITRE ATLAS Alignment
+## Detection Layers
 
-Retrivance is designed to address specific techniques documented in the [MITRE ATLAS](https://atlas.mitre.org/) (Adversarial Threat Landscape for Artificial-Intelligence Systems) matrix, a living knowledge base of adversary tactics and techniques against AI systems.
+### L1. Ingest scanner (`core/scanner.py`)
 
-### ATLAS Techniques Covered
+Cheap lexical checks that run on every document.
 
-| ATLAS Technique | Category | Retrivance Defense |
-|----------------|----------|-------------------|
-| **RAG Poisoning** | Initial Access / Resource Development | Ingest scanner + embedding anomaly guard |
-| **False RAG Entry Injection** | Resource Development | Provenance validation + integrity checks |
-| **Retrieval Content Crafting** | Execution | Semantic similarity + hubness detection |
-| **Gather RAG-Indexed Targets** | Reconnaissance | Query-neighborhood analysis |
-| **LLM Prompt Injection** (via documents) | Execution | Lexical scanner + classification |
-| **RAG Credential Harvesting** | Collection | Exfiltration pattern detection |
-| **LLM Data Leakage** | Exfiltration | Retrieval-time filtering + quarantine |
-| **LLM Prompt Obfuscation** | Defense Evasion | Zero-width char detection + homoglyph analysis |
-| **Triggers in Multimodal Inputs** | Defense Evasion | Hidden text detection (HTML/CSS) |
+- Zero-width and invisible characters, after Unicode normalization
+- Homoglyphs and mixed-script tokens
+- Hidden HTML/CSS: `display:none`, `visibility:hidden`, font-size manipulation
+- Imperative injection phrasing (for example "ignore previous instructions", "act as")
+- Exfiltration markers: canary tokens, webhook URLs, OAST-style callbacks
 
-### Context: Why RAG Defense Matters
+### L2. Embedding anomaly guard (`core/embedding_guard.py`)
 
-The ATLAS matrix (as of 2026) lists 16 tactics, 208 techniques, 40 mitigations, and 73 case studies. New agent-focused techniques highlight three key trends:
+Embeds chunks with `sentence-transformers/all-MiniLM-L6-v2` and looks for retrieval bait.
 
-1. **Agents act, not just answer** — AI Agent Tool Invocation, Escape to Host, and Data Destruction via Tool Invocation
-2. **Retrieval is an attack surface** — RAG Poisoning, False RAG Entry Injection, AI Agent Context Poisoning, and Retrieval Content Crafting show attackers planting content that the model later trusts
-3. **AI supply chain is weak** — Publish Hallucinated Entities, Publish Poisoned AI Artifacts, and AI Supply Chain Rug Pull target the models, datasets, and packages that teams pull in
+- Nearest-neighbor density: how many probe queries (`configs/probe_queries.json`) return the chunk in their top-k
+- Hubness score: chunks that sit close to an unusually large part of the query space
+- Reference-corpus comparison, so a single unusual document is not flagged in isolation
 
-Retrivance addresses the retrieval attack surface by treating knowledge base content as untrusted data rather than trusted instructions.
+### L3. Provenance store (`core/provenance.py`)
 
----
+SQLite ledger recording the identity and integrity state of each document.
 
-## ✨ Key Features
+- SHA-256 content hash, author and source attribution
+- Mutability lock and revocation status
+- Optional Ed25519 signatures
 
-### 🔍 Multi-Layer Detection
+Detects content that changed after ingestion or arrived from an unverified source.
 
-Retrivance combines multiple detection signals rather than relying on a single classifier:
+### L4. Context filter (`core/filter.py`)
 
-- **Lexical Detection** — Zero-width characters, homoglyphs, imperative instruction patterns
-- **Semantic Embedding Analysis** — Hubness detection for retrieval-bait identification
-- **Machine-Learning Classification** — TF-IDF + LogisticRegression for attack pattern recognition
-- **Provenance Validation** — SHA-256 hashing and cryptographic integrity checks
-- **Retrieval-Time Filtering** — Real-time chunk screening during query execution
-- **Counterfactual Influence Analysis** — Causal impact measurement on LLM outputs
-- **Quarantine System** — Suspicious content isolation for SOC review
+Runs at query time on the retrieved chunks.
 
-### 🧠 Semantic Detection
+- Token-level injection scan
+- Canary and exfiltration payload check
+- TF-IDF + LogisticRegression classifier score
+- Quarantine of flagged chunks
 
-Retrivance uses Sentence Transformers embeddings to identify semantic similarity between potentially malicious content and known attack patterns.
+### L5. Counterfactual influence engine (`core/influence.py`)
 
-**Model:** `sentence-transformers/all-MiniLM-L6-v2`
+Measures how much each chunk moves the answer.
 
-Sentence Transformers provides fixed-size vector representations suitable for semantic search and similarity comparison.
-
-### 🔐 Integrity & Provenance
-
-Retrivance incorporates document-level security controls designed to reduce the risk of modified or untrusted knowledge entering the retrieval pipeline:
-
-- SHA-256 content hashing
-- SQLite-based provenance ledger
-- Optional Ed25519 cryptographic signatures
-- Document revocation and mutability controls
-
-This follows established RAG-security guidance around document hashing, provenance tracking, ingestion scanning, retrieval filtering, and index integrity.
-
----
-
-## 🏗️ Security Architecture
-
-Retrivance follows a defense-in-depth approach with a dual-gate architecture positioned both upstream (pre-ingestion) and downstream (post-retrieval) of the vector database.
-
-```mermaid
-graph TB
-    subgraph "Ingestion Gate"
-        A[Raw Documents] --> B[Layer 1: Ingest Scanner]
-        B --> C[Layer 2: Embedding Anomaly Guard]
-        C --> D[Layer 3: Provenance Store]
-        D --> E{Verdict}
-        E -->|PASS| F[Vector Database]
-        E -->|QUARANTINE| G[Quarantine Store]
-    end
-
-    subgraph "Retrieval Gate"
-        H[User Query] --> F
-        F --> I[Top-K Chunks]
-        I --> J[Layer 4: Context Filter]
-        J --> K[Layer 5: Influence Engine]
-        K --> L[Verified Context]
-        L --> M[Target LLM]
-        M --> N[Verified Answer]
-    end
-
-    subgraph "SOC Dashboard"
-        O[Layer 6: Security Dashboard]
-        O --> G
-        O --> D
-    end
-
-    style B fill:#FFE4E1
-    style C fill:#E0FFFF
-    style D fill:#F0FFF0
-    style J fill:#FFE4E1
-    style K fill:#E0FFFF
-    style G fill:#FFB6C1
+```
+baseline        = LLM(Q, chunks)
+counterfactual  = LLM(Q, chunks \ {i})        for each chunk i
+divergence_i    = 1 - cos_sim(embed(baseline), embed(counterfactual_i))
 ```
 
----
+A chunk with high divergence is treated as disproportionately influential, even if it passed every lexical check. The last remaining chunk is never dropped. Cost is K+1 LLM calls per query.
 
-## 🔬 Detection Pipeline
+### L6. Dashboard (`ui/dashboard.py`)
 
-### Layer 1: Ingest Scanner
-
-The first layer identifies suspicious language and attack patterns using lexical features:
-
-- **Zero-width & invisible characters** — Unicode normalization and hidden character detection
-- **Homoglyph detection** — Mixed-script and confusable character analysis
-- **Hidden HTML/CSS** — `display:none`, `visibility:hidden`, font-size manipulation
-- **Imperative instruction patterns** — "ignore previous instructions", "system override", "act as"
-- **Exfiltration patterns** — Canary tokens, webhook URLs, OAST-style payloads
-
-This layer is useful for detecting recognizable prompt-injection structures while remaining computationally inexpensive.
-
-### Layer 2: Embedding Anomaly Guard
-
-Documents are converted into dense semantic representations using:
-
-`sentence-transformers/all-MiniLM-L6-v2`
-
-The guard evaluates:
-- **Nearest-neighbor density** — Chunk appears as top-k result for many probe queries
-- **Hubness scoring** — Identifies retrieval-optimized bait documents
-- **Reference-corpus comparison** — Avoids single-item false positives
-
-Semantic similarity can identify content that is conceptually similar to known malicious examples even when the wording changes.
-
-### Layer 3: Provenance Store
-
-Documents are checked against their expected provenance and integrity information:
-
-- **SHA-256 hashing** — Content identity verification
-- **SQLite ledger** — Persistent metadata tracking
-- **Author verification** — Source attribution
-- **Revocation control** — Mutability locks and revocation status
-- **Optional signatures** — Ed25519 cryptographic signing
-
-This layer is designed to detect content that has been modified after ingestion or that originates from an untrusted source.
-
-### Layer 4: Context Filter
-
-Detection does not stop at ingestion. Suspicious content can also be prevented from entering the retrieved context:
-
-- **Token-level injection scan** — Real-time lexical analysis of retrieved chunks
-- **Canary leakage check** — Exfiltration payload detection
-- **ML classifier integration** — TF-IDF + LogisticRegression scoring
-- **Quarantine isolation** — Suspicious chunks separated for review
-
-This is important because a malicious document becomes particularly dangerous when it is successfully retrieved and treated as contextual information by the model.
-
-### Layer 5: Counterfactual Influence Engine
-
-The influence engine measures causal impact of each retrieved chunk on the LLM output:
-
-- **Baseline generation** — LLM(Q, all_chunks)
-- **Leave-one-out analysis** — LLM(Q, chunks\{i}) for each chunk
-- **Semantic divergence** — `1 - cosine_similarity(baseline, counterfactual)`
-- **Last-chunk protection** — Never drops the final remaining chunk
-
-This identifies chunks that disproportionately influence the answer, even if they pass lexical checks.
-
-### Layer 6: Security Dashboard
-
-Streamlit-based SOC interface for:
-- Ingest inspection and audit trails
-- Query security monitoring
-- Quarantine review and approval/rejection
-- Provenance verification
-- Risk score visualization
+Streamlit interface for ingest audit trails, query monitoring, quarantine approve/reject, provenance verification and per-document risk scores.
 
 ---
 
-## 🧪 Evaluation
+## Evaluation
 
-Retrivance is evaluated on a realistic benchmark with:
+### Benchmark design
 
-- **Template-disjoint splits** — Training and test use different attack patterns
-- **Hard negatives** — Clean data includes code docs, HTML, and legitimate URLs
-- **Adversarial variants** — Paraphrased injections, split payloads, homoglyphs, low-confidence attacks
-
-### Evaluation Splits
-
-| Split | Samples | Purpose |
-|-------|---------|---------|
-| Test — Unseen Templates | 100 | Measures generalization to previously unseen attack templates |
-| Adversarial — Bypass | 12 | Measures resistance to bypass attempts |
-| Clean — Hard Negatives | 150 | Measures false positives against difficult benign examples |
-| Overall | 262 | Combined evaluation |
+- **Template-disjoint split:** attack templates in the test set are absent from training
+- **Hard negatives:** clean data includes code documentation, HTML and legitimate URLs
+- **Adversarial variants:** paraphrased injections, split payloads, homoglyphs, low-confidence attacks
 
 ### Results
 
-| Split | Samples | Recall | Precision | ASR | FPR | Clean Retention |
+| Split | Samples | Recall | Precision | ASR | FPR | Clean retention |
 |-------|---------|--------|-----------|-----|-----|-----------------|
-| Test (Unseen Templates) | 100 | 31.00% | 100% | 69% | 0% | N/A |
-| Adversarial (Bypass) | 12 | 8.33% | 100% | 91.67% | 0% | N/A |
-| Clean (Hard Negatives) | 150 | N/A | N/A | N/A | 6.67% | 93.33% |
+| Test, unseen templates | 100 | 31.00% | 100% | 69.00% | 0% | n/a |
+| Adversarial, bypass | 12 | 8.33% | 100% | 91.67% | 0% | n/a |
+| Clean, hard negatives | 150 | n/a | n/a | n/a | 6.67% | 93.33% |
 | Overall | 262 | 28.57% | 76.19% | 71.43% | 6.67% | 93.33% |
 
-### Metric Definitions
+Per-split precision is 100% because those splits contain no clean samples. The overall precision of 76.19% reflects the 10 false positives from the clean split (32 true positives, 10 false positives).
 
-- **Recall** — Proportion of malicious examples successfully detected
-- **Precision** — Proportion of flagged examples that were actually malicious
-- **ASR (Attack Success Rate)** — Proportion of attacks that successfully bypassed the defense
-- **FPR (False Positive Rate)** — Proportion of clean examples incorrectly flagged
-- **Clean Retention** — Proportion of clean examples retained by the system
+ASR is the share of attacks that bypassed the defense. FPR is the share of clean documents incorrectly flagged.
 
-### Interpretation
+### Reading the results
 
-The evaluation demonstrates a strong precision-oriented behavior: flagged samples were highly reliable in the reported test splits. However, recall remains the primary limitation, particularly for the adversarial bypass split:
-
-- **Unseen-template recall:** 31.00%
-- **Adversarial-bypass recall:** 8.33%
-- **Adversarial-bypass ASR:** 91.67%
-- **Clean retention:** 93.33%
-
-These results indicate that the current system is conservative and can avoid incorrectly blocking many benign samples, but remains vulnerable to adaptive or previously unseen attacks. The adversarial split is therefore an important area for future improvement rather than a result to conceal.
-
-### Evaluation Metrics
-
-The evaluation follows MITRE ATLAS recommendations for testing AI security controls:
-
-| Metric | Required | Current | Status |
-|--------|----------|---------|--------|
-| Poisoning detection precision | ✅ | 76.19% | ✅ Measured |
-| Poisoning detection recall | ✅ | 28.57% | ✅ Measured |
-| Attack success rate (before/after) | ✅ | 100% → 71.43% | ✅ Measured |
-| Answer quality on clean queries | ✅ | 93.33% retention | ⚠️ LLM-judge recommended |
-| False-positive rate on benign tasks | ✅ | 6.67% | ✅ Measured |
-| Extra ingest/query latency | ✅ | ~356ms | ✅ Measured |
-
-**Note:** Answer quality via LLM-judge score or exact match on clean queries is recommended for future evaluation to fully satisfy the MITRE ATLAS specification. The current clean retention metric (93.33%) measures document preservation but not semantic answer quality.
+The system is conservative: when it flags something it is usually right, and it keeps 93.33% of hard-negative clean documents. Coverage is the weakness. It misses roughly 69% of unseen-template attacks and 92% of adversarial bypass attempts. Recall, not precision, is the figure to track from here.
 
 ---
 
-## ⚔️ Threat Model
+## Limitations
 
-Retrivance focuses primarily on attacks where an adversary can influence content entering or being retrieved from a RAG knowledge base.
+- Recall is low on unseen and adversarial attacks (28.57% overall, 8.33% on bypass).
+- The adversarial split has only 12 samples; its numbers indicate direction, not a robust estimate.
+- The benchmark is synthetic: generated poisoned chunks over Wikipedia snippets, not production data.
+- No format-level parsing: white-on-white text in PDFs and hidden DOCX metadata are not detected.
+- No image or OCR scanning.
+- The TF-IDF + LogisticRegression classifier may still overfit to template phrasing despite template-disjoint splits.
+- The influence engine adds K+1 LLM calls per query.
+- No online adaptation to new attack patterns.
 
-### Considered Threats
-
-| Threat | Defense Layer |
-|--------|---------------|
-| Prompt injection | Lexical + semantic detection |
-| RAG document poisoning | Ingestion scanning + hubness detection |
-| Obfuscated attacks | Semantic detection + homoglyph analysis |
-| Unseen attack templates | Generalized classification |
-| Adversarial bypasses | Red-team evaluation |
-| Document tampering | Integrity verification |
-| Untrusted sources | Provenance validation |
-| Malicious retrieved context | Retrieval-time filtering |
-| Disproportionate influence | Counterfactual analysis |
-
-RAG poisoning is an established security concern because an attacker can inject malicious texts into a knowledge database and attempt to influence the answers produced by the downstream LLM.
+High precision on this benchmark does not imply high attack coverage.
 
 ---
 
-## 📊 Why Hard Negatives Matter
+## Roadmap
 
-A detector that simply blocks anything suspicious is not sufficient for a production RAG system. A useful defense must distinguish:
-
-```
-Malicious Content                    Legitimate Content
-       │                                    │
-       ├── obvious attack                   ├── normal documents
-       ├── obfuscated attack                ├── unusual wording
-       ├── semantic attack                  └── hard negatives
-       └── adversarial bypass
-              │
-              VS
-              │
-```
-
-The inclusion of 150 clean hard-negative samples in the evaluation is intended to measure whether security controls unnecessarily reject legitimate content. The reported 6.67% FPR / 93.33% clean retention provides a direct measurement of this trade-off.
+- Larger, more varied attack set, including LLM-generated paraphrases and multilingual injections
+- Transformer-based classifier (for example DeBERTa-small) alongside or replacing TF-IDF + LR
+- Stronger Unicode normalization and invisible-character handling in L1
+- Document parsers for PDF, DOCX and HTML hidden-text extraction; OCR for images
+- Threshold calibration on development data only, with precision/recall curves across thresholds
+- Direct embedding-space attack tests against L2
+- Influence engine caching and early exit to cut latency
+- Signed, hash-chained audit logs
+- Automated red-team regression tests in CI
+- Latency and throughput measurements per layer
 
 ---
 
-## 🧩 Technology Stack
+## Installation
 
-| Component | Technology |
-|-----------|------------|
-| Semantic Embeddings | Sentence Transformers |
-| Embedding Model | `all-MiniLM-L6-v2` |
-| NLP Features | TF-IDF |
-| Classification | LogisticRegression (scikit-learn) |
-| Vector Database | ChromaDB |
-| Provenance Store | SQLite |
-| Retrieval Security | Multi-layer filtering |
-| Integrity | SHA-256 + Ed25519 (optional) |
-| API | FastAPI + Uvicorn |
-| Dashboard | Streamlit |
-| Evaluation | Recall, Precision, ASR, FPR, Clean Retention |
-
----
-
-## 🚀 Getting Started
-
-### Prerequisites
-
-- Python 3.10 or 3.11
-- Git
-
-### Installation
+Requires Python 3.10 or 3.11.
 
 ```bash
-# Clone the repository
 git clone https://github.com/Pragati1466/Retrivance.git
 cd Retrivance
-
-# Install dependencies
 pip install -e .
 ```
 
-### Quick Start
+---
+
+## Usage
 
 ```bash
-# Generate realistic benchmark with template-disjoint splits
+# Build the benchmark (template-disjoint splits)
 python scripts/generate_poison_dataset.py
 
-# Train classifier on training split (unseen templates reserved for test)
+# Train the classifier on the training split
 python scripts/train_classifier.py
 
-# Run benchmark to evaluate on test, adversarial, and clean splits
+# Evaluate on test, adversarial and clean splits
 python scripts/run_benchmark.py
 
-# Run API server
+# Start the API (docs at http://localhost:8000/docs)
 uvicorn ragsentinel.api.server:app --host 0.0.0.0 --port 8000 --reload
 
-# Run SOC Dashboard
+# Start the dashboard (http://localhost:8501)
 streamlit run ragsentinel/ui/dashboard.py --server.port 8501
 ```
 
-### API Access
-
-- **API Documentation:** http://localhost:8000/docs
-- **Dashboard:** http://localhost:8501
+Benchmark files: `test_poisoned.jsonl` (unseen templates), `adversarial_attacks.jsonl` (bypass), `clean_hard_negatives.jsonl` (hard negatives), all under `data/benchmark/`.
 
 ---
 
-## 🧪 Running Evaluation
-
-The evaluation should be run against the project's supplied test datasets. The evaluation categories are:
+## Repository Layout
 
 ```
-Test
-├── Unseen Templates (test_poisoned.jsonl)
-
-Adversarial
-└── Bypass (adversarial_attacks.jsonl)
-
-Clean
-└── Hard Negatives (clean_hard_negatives.jsonl)
-```
-
-The resulting metrics should be reported using the same definitions as the evaluation table above.
-
----
-
-## 📁 Project Structure
-
-```
-Retrivance/
-│
-├── configs/
-│   ├── sentinel_config.yaml          # Security configuration
-│   └── probe_queries.json            # Embedding guard probe queries
-│
-├── data/
-│   ├── benchmark/
-│   │   ├── train_poisoned.jsonl     # Training split
-│   │   ├── test_poisoned.jsonl      # Unseen template test
-│   │   ├── adversarial_attacks.jsonl # Bypass attempts
-│   │   └── clean_hard_negatives.jsonl # Hard negatives
-│   └── ledger/
-│       ├── provenance_store.db      # SQLite provenance ledger
-│       └── chroma_db/               # Persistent vector database
-│
-├── models/
-│   └── injection_clf.pkl            # Trained classifier
-│
-├── ragsentinel/
-│   ├── __init__.py
-│   ├── api/
-│   │   ├── __init__.py
-│   │   └── server.py                # FastAPI gateway
-│   ├── core/
-│   │   ├── __init__.py
-│   │   ├── scanner.py               # Layer 1: Ingest Scanner
-│   │   ├── embedding_guard.py       # Layer 2: Embedding Anomaly Guard
-│   │   ├── provenance.py            # Layer 3: Provenance Store
-│   │   ├── filter.py                # Layer 4: Context Filter
-│   │   ├── influence.py             # Layer 5: Influence Engine
-│   │   └── quarantine.py            # Quarantine management
-│   ├── models/
-│   │   ├── __init__.py
-│   │   └── schemas.py               # Pydantic threat schemas
-│   ├── pipeline/
-│   │   ├── __init__.py
-│   │   └── sentinel_rag.py          # Orchestration layer
-│   └── ui/
-│       ├── __init__.py
-│       └── dashboard.py             # Layer 6: SOC Dashboard
-│
-├── scripts/
-│   ├── generate_poison_dataset.py   # Synthetic attack generation
-│   ├── generate_clean_corpus.py     # Clean corpus generation
-│   ├── train_classifier.py          # ML classifier training
-│   └── run_benchmark.py             # Evaluation script
-│
-├── tests/
-│   ├── test_scanner.py
-│   ├── test_embedding_guard.py
-│   └── test_influence.py
-│
-├── pyproject.toml                   # Package configuration
-├── README.md                        # This file
-└── .gitignore
+configs/
+  sentinel_config.yaml        security configuration
+  probe_queries.json          probe queries for the embedding guard
+data/
+  benchmark/                  train, test, adversarial and clean splits
+  ledger/                     SQLite provenance DB, Chroma store
+models/
+  injection_clf.pkl           trained classifier
+ragsentinel/
+  api/server.py               FastAPI gateway
+  core/                       scanner, embedding_guard, provenance,
+                              filter, influence, quarantine
+  models/schemas.py           Pydantic schemas
+  pipeline/sentinel_rag.py    orchestration
+  ui/dashboard.py             Streamlit dashboard
+scripts/                      dataset generation, training, benchmark
+tests/                        scanner, embedding guard, influence
 ```
 
 ---
 
-## 🛡️ Security Design Principles
+## Stack
 
-Retrivance follows several important principles for securing RAG systems:
-
-1. **Retrieved content is data, not instructions**
-   Documents retrieved from a knowledge base should not automatically be trusted as executable instructions.
-
-2. **Defense in depth**
-   No individual detector should be treated as sufficient protection.
-
-3. **Verify before retrieval**
-   Integrity and provenance checks should occur before potentially malicious content reaches the generation layer.
-
-4. **Monitor adversarial behavior**
-   Security evaluation should include deliberately crafted attacks rather than relying exclusively on standard test examples.
-
-5. **Measure false positives**
-   Security controls must also preserve legitimate knowledge.
-
-These principles align with current OWASP guidance for RAG security, including document-poisoning defenses, embedding monitoring, provenance, retrieval filtering, and adversarial testing.
+Python, sentence-transformers (`all-MiniLM-L6-v2`), scikit-learn (TF-IDF, LogisticRegression), ChromaDB, SQLite, FastAPI and Uvicorn, Streamlit. Integrity uses SHA-256 with optional Ed25519.
 
 ---
 
-## ⚠️ Current Limitations
+## Design Principles
 
-Based on the reported evaluation:
-
-- **Detection recall is currently limited** — 28.57% overall recall on unseen attacks
-- **Adversarial bypass resistance is weak** — 8.33% recall on bypass split (91.67% ASR)
-- **The adversarial dataset contains only 12 samples** — Conclusions about general adversarial robustness should be treated cautiously
-- **Synthetic data limitations** — Benchmark uses generated poisoned chunks and Wikipedia snippets, not real production data
-- **Template coverage gaps** — While template-disjoint, the attack patterns may not reflect sophisticated real-world techniques
-- **No multimodal support** — Does not scan images or OCR text within documents
-- **No format-level parsing** — Does not detect white-on-white text in PDFs or hidden metadata in DOCX
-- **Classifier overfitting risk** — Even with template-disjoint splits, the TF-IDF+LR classifier may overfit to attack patterns
-- **Influence engine overhead** — Counterfactual analysis requires K+1 LLM calls per query, adding significant latency
-- **No adaptive defense** — Does not automatically adapt to new attack patterns seen in production
-
-The system should be evaluated against larger and more diverse attack datasets before being considered robust for production security. A high precision score does not imply high attack coverage.
+- Retrieved content is data, never instructions.
+- Verify provenance and integrity before content reaches generation.
+- Layer independent detectors; none is sufficient alone.
+- Evaluate against crafted attacks, not only standard test examples.
+- Report false positives; a defense that drops legitimate knowledge is not deployable.
 
 ---
 
-## 🔮 Future Work
+## MITRE ATLAS Alignment
 
-Potential improvements include:
+Retrivance addresses specific techniques documented in the [MITRE ATLAS](https://atlas.mitre.org/) matrix:
 
-- **Expand adversarial training data** — Larger and more diverse attack datasets
-- **Generate more diverse paraphrased attacks** — LLM-generated variants
-- **Add multilingual attack variants** — Cross-lingual prompt injection detection
-- **Add Unicode and invisible-character normalization** — Enhanced obfuscation detection
-- **Improve semantic anomaly detection** — Advanced hubness calibration
-- **Add ensemble classifiers** — DeBERTa-small or transformer-based models
-- **Calibrate detection thresholds** — Development data only, no test leakage
-- **Evaluate different embedding models** — Larger models for better semantic representation
-- **Add retrieval-level anomaly scoring** — Context-window level detection
-- **Add document-level trust scores** — Reputation-based filtering
-- **Add stronger provenance verification** — Signed hash-chained audit logs
-- **Evaluate against larger poisoning benchmarks** — Standardized evaluation
-- **Add automated red-team regression tests** — CI/CD integration
-- **Measure detection latency and throughput** — Performance optimization
-- **Evaluate precision/recall trade-offs** — Multiple threshold analysis
-- **Test attacks that manipulate embeddings** — Direct embedding space attacks
-- **Implement document parsers** — PDF, DOCX, HTML hidden text detection
-- **Add multimodal OCR** — Image text scanning
-- **Optimize influence engine** — Caching and early exit strategies
-
-OWASP specifically recommends monitoring embedding distributions, scanning retrieved chunks for injection patterns, maintaining provenance, and incorporating red-team RAG tests into CI/CD.
+| ATLAS Technique | Retrivance Defense |
+|----------------|-------------------|
+| RAG Poisoning | Ingest scanner + embedding anomaly guard |
+| False RAG Entry Injection | Provenance validation + integrity checks |
+| Retrieval Content Crafting | Semantic similarity + hubness detection |
+| LLM Prompt Injection (via documents) | Lexical scanner + classification |
+| RAG Credential Harvesting | Exfiltration pattern detection |
+| LLM Data Leakage | Retrieval-time filtering + quarantine |
+| LLM Prompt Obfuscation | Zero-width char detection + homoglyph analysis |
+| Triggers in Multimodal Inputs | Hidden text detection (HTML/CSS) |
 
 ---
 
-## 🎓 Project Background
+## References
 
-Retrivance is one of three AI + Cybersecurity projects designed to address real gaps in the MITRE ATLAS matrix:
-
-- **AgentGuard** — Runtime policy firewall for AI agent tool calls
-- **Retrivance (RAGSentinel)** — Detector and prevention layer for poisoned retrieval content
-- **ProvenanceGuard** — Scanner for hallucinated packages and tampered AI artifacts
-
-### Deliverables
-
-This project provides:
-
-- ✅ **Open-source repository** — https://github.com/Pragati1466/Retrivance
-- ✅ **Poisoning benchmark dataset** — Template-disjoint splits with adversarial variants
-- ✅ **Evaluation harness** — Scripts for measuring ASR, precision, recall, FPR, and latency
-- ✅ **Pip-installable library** — `pip install -e .` for easy integration
-- ✅ **SOC dashboard** — Streamlit UI for quarantine management and audit review
-- ⚠️ **Evaluation notebook** — Scripts available; Jupyter notebook format recommended for publication
-- ⚠️ **Short paper or blog** — README provides comprehensive documentation; formal write-up recommended for academic submission
-
-### Build Phases Completed
-
-| Phase | Status | Implementation |
-|-------|--------|----------------|
-| Baseline RAG app | ✅ | ChromaDB-based pipeline with public corpus simulation |
-| Poisoning dataset (200 docs, 4 attack types) | ✅ | Synthetic generator with answer swap, instruction injection, data exfil, hidden text |
-| Measure attacks with no defense | ✅ | Benchmark includes no-defense baseline measurement |
-| Implement scanner + filter + thresholds | ✅ | All 6 security layers implemented with configurable thresholds |
-| Add influence test + review UI | ✅ | Counterfactual influence engine + Streamlit dashboard |
-
-### Use Cases
-
-- **Resume/portfolio** — Demonstrates working knowledge of RAG security, MITRE ATLAS techniques, and adversarial ML evaluation
-- **Research publication** — Realistic benchmark with template-disjoint evaluation suitable for security conferences
-- **Demo** — 5-minute walkthrough possible using the Streamlit dashboard and API endpoints
-- **Production integration** — FastAPI gateway and modular design allow integration into existing RAG pipelines
-
-### Difficulty Level
-
-**Medium** — Best for research-style results and a publishable benchmark.
-
-This project is ideal for:
-- Security researchers focused on AI/ML robustness
-- ML engineers building production RAG systems
-- Red teams evaluating RAG vulnerabilities
-- Academic publication in AI security venues
+- Lewis et al., Retrieval-Augmented Generation for Knowledge-Intensive NLP Tasks, NeurIPS 2020
+- Zou et al., PoisonedRAG: Knowledge Corruption Attacks to Retrieval-Augmented Generation of Large Language Models, 2024
+- Xue et al., BadRAG: Identifying Vulnerabilities in Retrieval Augmented Generation of Large Language Models, 2024
+- Reimers and Gurevych, Sentence-BERT: Sentence Embeddings using Siamese BERT-Networks
+- OWASP, Retrieval-Augmented Generation (RAG) Security Cheat Sheet
+- OWASP, LLM Prompt Injection Prevention Cheat Sheet
+- MITRE ATLAS, https://atlas.mitre.org
 
 ---
 
-## 📚 References
-
-- Lewis et al. — *Retrieval-Augmented Generation for Knowledge-Intensive NLP Tasks*, NeurIPS 2020.
-- Zou et al. — *PoisonedRAG: Knowledge Corruption Attacks to Retrieval-Augmented Generation of Large Language Models*, 2024.
-- Xue et al. — *BadRAG: Identifying Vulnerabilities in Retrieval Augmented Generation of Large Language Models*, 2024.
-- OWASP — *Retrieval-Augmented Generation (RAG) Security Cheat Sheet*.
-- OWASP — *LLM Prompt Injection Prevention Cheat Sheet*.
-- Sentence Transformers — *all-MiniLM-L6-v2 documentation*.
-- Reimers & Gurevych — *Sentence-BERT: Sentence Embeddings using Siamese BERT-Networks*.
-- MITRE ATLAS — *Adversarial Threat Landscape for Artificial-Intelligence Systems*.
-
----
-
-## 📌 Disclaimer
-
-Retrivance is a research/security engineering project. Detection results depend on the datasets, attack templates, thresholds, models, and evaluation configuration used.
-
-A detector should not be considered secure solely because it achieves high precision on a particular test set. Robust RAG security requires continuous adversarial evaluation, provenance controls, retrieval safeguards, monitoring, and defense in depth.
-
----
-
-## 📄 License
+## License
 
 Apache-2.0
