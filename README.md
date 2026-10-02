@@ -45,17 +45,18 @@ RAGSentinel is evaluated on a realistic benchmark with:
 
 | Metric | Test (Unseen Templates) | Adversarial (Bypass Attempts) | Clean (Hard Negatives) | Overall |
 |--------|------------------------|--------------------------------|------------------------|---------|
-| Detection Recall | TBD% | TBD% | N/A | TBD% |
-| Detection Precision | TBD% | TBD% | N/A | TBD% |
-| Attack Success Rate | TBD% | TBD% | N/A | TBD% |
-| False Positive Rate | N/A | N/A | TBD% | TBD% |
-| Clean Retention | N/A | N/A | TBD% | TBD% |
+| Detection Recall | 31.00% | 8.33% | N/A | 28.57% |
+| Detection Precision | 100.00% | 100.00% | N/A | 76.19% |
+| Attack Success Rate | 69.00% | 91.67% | N/A | 71.43% |
+| False Positive Rate | 0.00% | 0.00% | 6.67% | 6.67% |
+| Clean Retention | N/A | N/A | 93.33% | 93.33% |
+| Mean Latency | 346.00 ms | 549.26 ms | 361.73 ms | 355.99 ms |
 
-**Note:** Results are measured on synthetic data. Real-world performance may vary based on:
-- Domain-specific vocabulary (code, medical, legal docs)
-- Document formats (PDF, DOCX, HTML parsing)
-- LLM configuration and temperature
-- Query distribution and retrieval patterns
+**Interpretation:**
+- The system struggles with unseen attack templates (31% recall) compared to training patterns
+- Adversarial variants (paraphrased/split attacks) are particularly difficult to detect (8.33% recall)
+- Hard negatives (code docs with "ignore", legitimate URLs) cause 6.67% false positive rate
+- 93.33% of legitimate clean content passes through successfully
 
 ## Limitations
 
