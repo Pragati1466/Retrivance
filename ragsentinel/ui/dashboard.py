@@ -1,15 +1,29 @@
 import streamlit as st
 import pandas as pd
 import sys
+import os
 from pathlib import Path
 
 # Add project root to path for imports
-sys.path.insert(0, str(Path(__file__).parent.parent.parent))
+project_root = Path(__file__).parent.parent.parent
+sys.path.insert(0, str(project_root))
+os.chdir(str(project_root))
 
 st.set_page_config(page_title="Retrivance SOC Dashboard", layout="wide")
 
 st.title("🛡️ Retrivance: Security Operations Console")
 st.markdown("Real-time scanning, quarantine management, and poisoned retrieval defense.")
+
+# Try to install the package if not already installed
+try:
+    import ragsentinel
+except ImportError:
+    st.info("Installing ragsentinel package...")
+    import subprocess
+    subprocess.run([sys.executable, "-m", "pip", "install", "-e", str(project_root)], check=True)
+    # Clear import cache
+    import importlib
+    importlib.invalidate_caches()
 
 # Lazy import and initialization
 @st.cache_resource

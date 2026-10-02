@@ -1,1 +1,1 @@
-web: pip install -e . && streamlit run ragsentinel/ui/dashboard.py --server.port=$PORT --server.address=0.0.0.0
+web: python run_dashboard.py
